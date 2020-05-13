@@ -10,6 +10,9 @@ IF (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 	SET(RESTINIO_MASTER_PROJECT ON)
 ENDIF ()
 
+option(RESTINIO_PERFORMOUS_HACK "Hacks for building as a Performous dependency." ON)
+option(RESTINIO_USE_BOOST_REGEX "Include Boost.Regex support." ${PERFORMOUS_USE_BOOST_REGEX})
+
 option(RESTINIO_INSTALL "Generate the install target." ${RESTINIO_MASTER_PROJECT})
 option(RESTINIO_TEST "Build the tests." ${RESTINIO_MASTER_PROJECT})
 option(RESTINIO_SAMPLE "Build samples." ${RESTINIO_MASTER_PROJECT})
@@ -46,7 +49,7 @@ IF ((RESTINIO_TEST OR RESTINIO_SAMPLE OR RESTINIO_BENCH)
 	message(FATAL_ERROR "RESTINIO_ALLOW_SOBJECTIZER can't be OFF if RESTINIO_TEST or RESTINIO_SAMPLE or RESTINIO_BENCH is used")
 ENDIF ()
 
-IF (RESTINIO_MASTER_PROJECT)
+IF (RESTINIO_MASTER_PROJECT OR RESTINIO_PERFORMOUS_HACK)
 	# RESTinio is a main project (not subproject)
 	# Do regular stuff here.
 
@@ -56,6 +59,52 @@ IF (RESTINIO_MASTER_PROJECT)
 	# ------------------------------------------------------------------------------
 	# RESTinio dependencies:
 	# ASIO or Boost::ASIO
+	if (RESTINIO_PERFORMOUS_HACK)
+		set (RESTINIO_USE_BOOST_ASIO "shared" CACHE STRING "Use boost version of ASIO" FORCE)
+		set (BOOST_COMPONENTS)
+		if (RESTINIO_USE_BOOST_REGEX)
+			list (APPEND BOOST_COMPONENTS regex)
+			# Try to find boost for boost regex.
+		endif ()
+	
+		if (RESTINIO_USE_BOOST_ASIO MATCHES "none")
+			set (RESTINIO_STAND_ALONE_ASIO_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/asio/include)
+			set (RESTINIO_STAND_ALONE_ASIO_DEFINES -DASIO_STANDALONE -DASIO_HAS_STD_CHRONO -DASIO_DISABLE_STD_STRING_VIEW)
+		else ()
+			if (RESTINIO_USE_BOOST_ASIO MATCHES "shared")
+				set (Boost_USE_STATIC_LIBS OFF)
+			else ()
+				set (Boost_USE_STATIC_LIBS ON)
+			endif ()
+			list (APPEND BOOST_COMPONENTS system)
+		endif ()
+		list (LENGTH BOOST_COMPONENTS BOOST_COMPONENTS_NUM)
+		if (BOOST_COMPONENTS_NUM GREATER_EQUAL 1)
+			set (Boost_USE_MULTITHREADED ON)
+			find_package (Boost 1.66.0 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+		endif ()
+	
+		find_package (http_parser 2.8.1 MODULE)
+		if (HTTP_PARSER_FOUND)
+			add_library (http_parser SHARED IMPORTED GLOBAL)
+			set_target_properties (http_parser 
+			  PROPERTIES
+				IMPORTED_LOCATION ${HTTP_PARSER_LIBRARIES}
+				INTERFACE_INCLUDE_DIRECTORIES ${HTTP_PARSER_INCLUDE_DIRS}
+			)
+		else ()
+			message (STATUS "Could not find http_parser; will use embedded version.")
+			add_subdirectory (3rdparty-deps/http-parser)
+		endif ()
+		add_library (unofficial::http_parser::http_parser ALIAS http_parser)
+		find_package (fmt 6.1.0 CONFIG QUIET)
+		if (NOT fmt_FOUND)
+			message (STATUS "libfmt not found or installed version not suitable; using embedded version.")
+			add_subdirectory (3rdparty-deps/fmt)
+		endif ()
+	endif (RESTINIO_PERFORMOUS_HACK)
+	
+IF (RESTINIO_MASTER_PROJECT)
 	IF ( RESTINIO_USE_BOOST_ASIO MATCHES "none" )
 		SET( RESTINIO_STAND_ALONE_ASIO_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/asio/include )
 		SET( RESTINIO_STAND_ALONE_ASIO_DEFINES -DASIO_STANDALONE -DASIO_HAS_STD_CHRONO -DASIO_DISABLE_STD_STRING_VIEW)
@@ -179,6 +228,8 @@ IF (RESTINIO_MASTER_PROJECT)
 	message( STATUS "ZLIB_LIBRARIES='" ${ZLIB_LIBRARIES} "'" )
 	message( STATUS "ZLIB_INCLUDE_DIRS='" ${ZLIB_INCLUDE_DIRS} "'" )
 ENDIF (RESTINIO_MASTER_PROJECT)
+
+ENDIF (RESTINIO_MASTER_PROJECT OR RESTINIO_PERFORMOUS_HACK)
 
 # RESTinio itself.
 add_subdirectory(restinio)
