@@ -1,6 +1,6 @@
 [submodule "dev/3rdparty-deps/fmt"]
 	path = dev/3rdparty-deps/fmt
-	url = git@github.com:performous/fmt.git
+	url = https://github.com/performous/fmt.git
 [submodule "dev/3rdparty-deps/http-parser"]
 	path = dev/3rdparty-deps/http-parser
-	url = git@github.com:performous/http-parser.git
+	url = https://github.com/performous/http-parser.git
